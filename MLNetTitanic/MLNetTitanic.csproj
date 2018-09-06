@@ -5,4 +5,28 @@
     <TargetFramework>netcoreapp2.1</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="test_data.csv" />
+    <None Remove="train_data.csv" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="test_data.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="train_data.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML" Version="0.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="train2.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
