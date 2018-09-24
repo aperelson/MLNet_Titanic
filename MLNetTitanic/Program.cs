@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.Runtime.Api;
@@ -12,6 +14,7 @@ namespace MLNetTitanic
     {
         const string TrainDataPath = "train_data.csv";
         const string TestDataPath = "test_data.csv";
+        const string RealTestDataPath = "real_test.csv";
 
         public class PassengerData
         {
@@ -59,10 +62,9 @@ namespace MLNetTitanic
 
         static void Main(string[] args)
         {
-            PredictionModel<PassengerData, TitanicPrediction> model_FastTreeBinaryClassifier = Train_FastTreeBinaryClassifier();
-            //PredictionModel<PassengerData, TitanicPrediction> model_FastForestBinaryClassifier = Train_FastForestBinaryClassifier();
-
             var testDataLoader = new TextLoader(TestDataPath).CreateFrom<PassengerData>(useHeader: true, separator: ',');
+
+            PredictionModel<PassengerData, TitanicPrediction> model_FastTreeBinaryClassifier = Train_FastTreeBinaryClassifier();
             var evaluator = new BinaryClassificationEvaluator();
             BinaryClassificationMetrics metrics = evaluator.Evaluate(model_FastTreeBinaryClassifier, testDataLoader);
 
@@ -71,19 +73,71 @@ namespace MLNetTitanic
             Console.WriteLine($"Accuracy: {metrics.Accuracy} F1 Score: {metrics.F1Score}");
             Console.WriteLine($"True Positive: {metrics.ConfusionMatrix[0, 0]} False Positive: {metrics.ConfusionMatrix[0, 1]}");
             Console.WriteLine($"False Negative: {metrics.ConfusionMatrix[1, 0]} True Negative: {metrics.ConfusionMatrix[1, 1]}");
-            Console.ReadLine();
 
-            /*
-            evaluator = new BinaryClassificationEvaluator();
-            metrics = evaluator.Evaluate(model_FastForestBinaryClassifier, tempTextLoader);
 
-            Console.WriteLine("");
-            Console.WriteLine($"Train_FastForestBinaryClassifier");
-            Console.WriteLine($"Accuracy: {metrics.Accuracy} F1 Score: {metrics.F1Score}");
-            Console.WriteLine($"True Positive: {metrics.ConfusionMatrix[0, 0]} False Positive: {metrics.ConfusionMatrix[0, 1]}");
-            Console.WriteLine($"False Negative: {metrics.ConfusionMatrix[1, 0]} True Negative: {metrics.ConfusionMatrix[1, 1]}");
-            Console.ReadLine();
+            List<PassengerData> testThis = new List<PassengerData>();
+
+            using (var rd = new StreamReader(RealTestDataPath))
+            {
+                rd.ReadLine();
+
+                while (!rd.EndOfStream)
+                {
+                    var splits = rd.ReadLine().Split(',');
+
+                    testThis.Add(new PassengerData
+                    {
+                        Pclass = (float)Convert.ToDecimal(splits[1].ToString()),
+                        Sex = splits[4],
+                        Age = (float)Convert.ToDecimal(splits[5].ToString()),
+
+                    });
+                }
+            }
+
+                        /*
+        [Column(ordinal: "6")]
+        public float SibSp;
+
+        [Column(ordinal: "7")]
+        public float Parch;
+
+        [Column(ordinal: "8")]
+        public string Ticket;
+
+        [Column(ordinal: "9")]
+        public float Fare;
+
+        [Column(ordinal: "10")]
+        public string Cabin;
+
+        [Column(ordinal: "11")]
+        public string Embarked;
+
+        column1.Add(splits[0]);
+                    column2.Add(splits[1]);
+                }
+            }
+
+
+
+            var realTestDataLoader = new TextLoader(RealTestDataPath).CreateFrom<PassengerData>(useHeader: true, separator: ',');
+
+            var temp2 = realTestDataLoader
+
+            PassengerData data = new PassengerData
+            {
+                Age = 73,
+                Sex = "Female"
+            };
             */
+            //var temp2 = CollectionDataSource.Create(realTestDataLoader);
+
+
+            //IEnumerable<TitanicPrediction> prediction = model_FastTreeBinaryClassifier.Predict();
+
+            //Console.WriteLine("prediction: " + prediction.IsSurvived);
+            Console.ReadLine();
         }
 
         private static PredictionModel<PassengerData, TitanicPrediction> Train_FastTreeBinaryClassifier()
@@ -112,7 +166,7 @@ namespace MLNetTitanic
         {
             var pipeline = new LearningPipeline
             {
-                new TextLoader(TrainDataPath).CreateFrom<PassengerData>(separator: ','),
+                new TextLoader(TrainDataPath).CreateFrom<PassengerData>(useHeader: true, separator: ','),
 
                 new CategoricalOneHotVectorizer("Sex", "Embarked"),
 
@@ -125,6 +179,28 @@ namespace MLNetTitanic
                     "Embarked"),
 
                 new FastForestBinaryClassifier () { NumTrees = 100 }
+            };
+
+            return pipeline.Train<PassengerData, TitanicPrediction>();
+        }
+
+        private static PredictionModel<PassengerData, TitanicPrediction> Train_LogisticRegressionClassifier()
+        {
+            var pipeline = new LearningPipeline
+            {
+                new TextLoader(TrainDataPath).CreateFrom<PassengerData>(useHeader: true, separator: ','),
+
+                new CategoricalOneHotVectorizer("Sex", "Embarked"),
+
+                new ColumnConcatenator("Features",
+                    "Age",
+                    "Pclass",
+                    "SibSp",
+                    "Parch",
+                    "Sex",
+                    "Embarked"),
+
+                new LogisticRegressionBinaryClassifier () 
             };
 
             return pipeline.Train<PassengerData, TitanicPrediction>();
