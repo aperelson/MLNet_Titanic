@@ -33,6 +33,9 @@ namespace MLNetTitanic
             [Column(ordinal: "2")]
             public float Pclass;
 
+            [Column(ordinal: "3")]
+            public string Name;
+
             [Column(ordinal: "4")]
             public string Sex;
 
@@ -71,12 +74,11 @@ namespace MLNetTitanic
 
         static void Main(string[] args)
         {
-            var testDataLoader = new TextLoader(TestDataPath).CreateFrom<PassengerData>(useHeader: true, separator: ',');
-
-            
             PredictionModel<PassengerData, TitanicPrediction> model = Train_FastTreeBinaryClassifier();
+            var testData = CollectionDataSource.Create(ReadPassengerData(TestDataPath, true));
+
             var evaluator = new BinaryClassificationEvaluator();
-            BinaryClassificationMetrics metrics = evaluator.Evaluate(model, testDataLoader);
+            BinaryClassificationMetrics metrics = evaluator.Evaluate(model, testData);
 
             Console.WriteLine("");
             Console.WriteLine($"Train_FastTreeBinaryClassifier");
@@ -97,43 +99,15 @@ namespace MLNetTitanic
             */
 
 
-            List<PassengerData> testThis = ReadPassengerData(RealTestDataPath);
-
-            //List<PassengerData> testThis = new List<PassengerData>();
-            /*
-            using (var rd = new StreamReader(RealTestDataPath))
-            {
-                rd.ReadLine();
-
-                while (!rd.EndOfStream)
-                {
-                    var splits = rd.ReadLine().Split(',');
-
-                    testThis.Add(new PassengerData
-                    {
-                        PassengerId = (float)Convert.ToDecimal(splits[0].ToString()),
-                        Pclass = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(splits[1]) ? "0" : splits[1].ToString()),
-                        Sex = splits[4],
-                        Age = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(splits[5]) ? "0" : splits[5].ToString()),
-                        SibSp = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(splits[6]) ? "0" : splits[6].ToString()),
-                        Parch = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(splits[7]) ? "0" : splits[7].ToString()),
-                        Ticket = splits[8],
-                        Fare = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(splits[9]) ? "0" : splits[9].ToString()),
-                        Cabin = splits[10],
-                        Embarked = splits[11]
-                    });
-                }
-            }
-            */
-
-            IEnumerable<TitanicPrediction> predicts = model.Predict(testThis);
+            var testThis = ReadPassengerData(RealTestDataPath, false);
+            var predicts = model.Predict(testThis);
 
             Console.WriteLine("Classification Predictions");
 
             IEnumerable<(PassengerData sentiment, TitanicPrediction prediction)> sentimentsAndPredictions =
                 testThis.Zip(predicts, (sentiment, prediction) => (sentiment, prediction));
 
-            using (System.IO.StreamWriter file = new System.IO.StreamWriter(ResultsDataPath))
+            using (var file = new StreamWriter(ResultsDataPath))
             {
                 file.WriteLine("PassengerId,Survived");
 
@@ -164,7 +138,7 @@ namespace MLNetTitanic
         }
 
 
-        private static List<PassengerData> ReadPassengerData(string fileToRead)
+        private static List<PassengerData> ReadPassengerData(string fileToRead, bool isTrainData)
         {
             //Fix the data here:
             //Use a method so that other data can be fixed too.
@@ -172,6 +146,7 @@ namespace MLNetTitanic
 
             var csv = new CsvReader(reader);
             var listOfObjects = new List<PassengerData>();
+            var addAColumn = isTrainData ? 1 : 0;
 
             csv.Read();
             csv.ReadHeader();
@@ -181,28 +156,48 @@ namespace MLNetTitanic
                 listOfObjects.Add(new PassengerData
                 {
                     PassengerId = (float)Convert.ToDouble(csv[0].ToString()),
-                    Pclass = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[1]) ? "0" : csv[1].ToString()),
-                    Sex = csv[3],
-                    Age = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[4]) ? "0" : csv[4].ToString()),
-                    SibSp = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[5]) ? "0" : csv[5].ToString()),
-                    Parch = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[6]) ? "0" : csv[6].ToString()),
-                    Ticket = csv[7],
-                    Fare = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[8]) ? "0" : csv[8].ToString()),
-                    Cabin = csv[9],
-                    Embarked = csv[10]
+                    Pclass = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[1 + addAColumn]) ? "0" : csv[1+addAColumn].ToString()),
+                    Name = csv[2 + addAColumn],
+                    Sex = csv[3 + addAColumn],
+                    Age = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[4 + addAColumn]) ? "0" : csv[4 + addAColumn].ToString()),
+                    SibSp = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[5 + addAColumn]) ? "0" : csv[5 + addAColumn].ToString()),
+                    Parch = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[6 + addAColumn]) ? "0" : csv[6 + addAColumn].ToString()),
+                    Ticket = csv[7 + addAColumn],
+                    Fare = (float)Convert.ToDecimal(string.IsNullOrWhiteSpace(csv[8 + addAColumn]) ? "0" : csv[8 + addAColumn].ToString()),
+                    Cabin = csv[9 + addAColumn],
+                    Embarked = csv[10 + addAColumn],
+                    Survived = (isTrainData && csv[1] == "1") 
                 });
             }
+
+
+            //Set up the age.
+            //If the age is blank, then
+            //if it's a 'Master' then the age is the average of the ages under 18
+            //otherwise the age is the average of the ages
+
+            var ageAboveZero = listOfObjects.Where(l => l.Age > 0);
+            var ageYouths = listOfObjects.Where(l => l.Age > 0 && l.Age <= 18);
+            var averageYouthAge = ageYouths.Average(l => l.Age);
+            var averageAge = ageAboveZero.Average(l => l.Age);
+
+            listOfObjects.Where(l => l.Age == 0 && l.Name.ToUpper().Contains("MASTER")).ToList().ForEach(l => l.Age = averageYouthAge);
+            listOfObjects.Where(l => l.Age == 0 && !l.Name.ToUpper().Contains("MASTER")).ToList().ForEach(l => l.Age = averageAge);
+
+
+            //noAgeMasters.ToList().ForEach(l => l.Age = averageYouthAge);
+            //noAgeNotMasters.ToList().ForEach(l => l.Age = averageAge);
 
             return listOfObjects;
         }
 
         private static PredictionModel<PassengerData, TitanicPrediction> Train_FastTreeBinaryClassifier()
         {
-            var textLoader = new TextLoader(TrainDataPath).CreateFrom<PassengerData>(useHeader: true, separator: ',');
+            var dataCollection = CollectionDataSource.Create(ReadPassengerData(TrainDataPath, true));
 
             var pipeline = new LearningPipeline()
             {
-                textLoader,
+                dataCollection,
 
                 new CategoricalOneHotVectorizer("Sex", "Embarked"),
 
@@ -222,9 +217,11 @@ namespace MLNetTitanic
 
         private static PredictionModel<PassengerData, TitanicPrediction> Train_FastForestBinaryClassifier()
         {
+            var dataCollection = CollectionDataSource.Create(ReadPassengerData(TrainDataPath, true));
+
             var pipeline = new LearningPipeline
             {
-                new TextLoader(TrainDataPath).CreateFrom<PassengerData>(useHeader: true, separator: ','),
+                dataCollection,
 
                 new CategoricalOneHotVectorizer("Sex", "Embarked"),
 
@@ -244,9 +241,11 @@ namespace MLNetTitanic
 
         private static PredictionModel<PassengerData, TitanicPrediction> Train_LogisticRegressionClassifier()
         {
+            var dataCollection = CollectionDataSource.Create(ReadPassengerData(TrainDataPath, true));
+
             var pipeline = new LearningPipeline
             {
-                new TextLoader(TrainDataPath).CreateFrom<PassengerData>(useHeader: true, separator: ','),
+                dataCollection,
 
                 new CategoricalOneHotVectorizer("Sex", "Embarked"),
 
