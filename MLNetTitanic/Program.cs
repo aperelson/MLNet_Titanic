@@ -17,6 +17,7 @@ namespace MLNetTitanic
 {
     class Program
     {
+        const string CompleteTrainDataPath = "complete_train.csv";
         const string TrainDataPath = "train_data.csv";
         const string TestDataPath = "test_data.csv";
         const string RealTestDataPath = "real_test.csv";
@@ -74,17 +75,26 @@ namespace MLNetTitanic
 
         static void Main(string[] args)
         {
-            PredictionModel<PassengerData, TitanicPrediction> model = Train_FastTreeBinaryClassifier();
-            var testData = CollectionDataSource.Create(ReadPassengerData(TestDataPath, true));
+            //75%:
+            //PredictionModel<PassengerData, TitanicPrediction> model = Train_FastTreeBinaryClassifier();
 
-            var evaluator = new BinaryClassificationEvaluator();
-            BinaryClassificationMetrics metrics = evaluator.Evaluate(model, testData);
+            //79%:
+            PredictionModel<PassengerData, TitanicPrediction> model = Train_FastForestBinaryClassifier();
 
-            Console.WriteLine("");
-            Console.WriteLine($"Train_FastTreeBinaryClassifier");
-            Console.WriteLine($"Accuracy: {metrics.Accuracy} F1 Score: {metrics.F1Score}");
-            Console.WriteLine($"True Positive: {metrics.ConfusionMatrix[0, 0]} False Positive: {metrics.ConfusionMatrix[0, 1]}");
-            Console.WriteLine($"False Negative: {metrics.ConfusionMatrix[1, 0]} True Negative: {metrics.ConfusionMatrix[1, 1]}");
+            //75%:
+            //PredictionModel<PassengerData, TitanicPrediction> model = Train_LogisticRegressionClassifier();
+            
+
+            //var testData = CollectionDataSource.Create(ReadPassengerData(TestDataPath, true));
+
+            //var evaluator = new BinaryClassificationEvaluator();
+            //BinaryClassificationMetrics metrics = evaluator.Evaluate(model, testData);
+
+            //Console.WriteLine("");
+            //Console.WriteLine($"Train_FastTreeBinaryClassifier");
+            //Console.WriteLine($"Accuracy: {metrics.Accuracy} F1 Score: {metrics.F1Score}");
+            //Console.WriteLine($"True Positive: {metrics.ConfusionMatrix[0, 0]} False Positive: {metrics.ConfusionMatrix[0, 1]}");
+            //Console.WriteLine($"False Negative: {metrics.ConfusionMatrix[1, 0]} True Negative: {metrics.ConfusionMatrix[1, 1]}");
 
             /*
             PredictionModel<PassengerData, TitanicPrediction> model = Train_LogisticRegressionClassifier();
@@ -185,15 +195,34 @@ namespace MLNetTitanic
             listOfObjects.Where(l => l.Age == 0 && !l.Name.ToUpper().Contains("MASTER")).ToList().ForEach(l => l.Age = averageAge);
 
 
-            //noAgeMasters.ToList().ForEach(l => l.Age = averageYouthAge);
-            //noAgeNotMasters.ToList().ForEach(l => l.Age = averageAge);
+            //Set up the Fares:
+            var temp1 = listOfObjects.Where(l => l.Ticket == "19972");
+
+            //Group by people in the same class boarding at the same port:
+            //Multiple tickets means the fare was shared...
+            //For those with multiple tickets, split the fare across
+            var computedFares = listOfObjects
+                .Where(l => l.Fare != 0)
+                .GroupBy(p => new { p.Pclass, p.Ticket, p.Embarked, p.Fare })
+                .Select(group => new {
+                    Pclass = group.Key.Pclass,
+                    Ticket = group.Key.Ticket,
+                    Embarked = group.Key.Embarked,
+                    Fare = group.Average(g2 => g2.Fare)
+                })
+                .GroupBy(g => new { g.Pclass, g.Embarked })
+                .Select(h => new { Average = h.Average(i => i.Fare), Pclass = h.Key.Pclass, Embarked = h.Key.Embarked });
+
+            listOfObjects.Where(l => l.Fare == 0).ToList().ForEach(l => l.Fare = computedFares.FirstOrDefault(c => c.Pclass == l.Pclass && c.Embarked == l.Embarked).Average);
+
+            var temp2 = listOfObjects.Where(l => l.Ticket == "19972");
 
             return listOfObjects;
         }
 
         private static PredictionModel<PassengerData, TitanicPrediction> Train_FastTreeBinaryClassifier()
         {
-            var dataCollection = CollectionDataSource.Create(ReadPassengerData(TrainDataPath, true));
+            var dataCollection = CollectionDataSource.Create(ReadPassengerData(CompleteTrainDataPath, true));
 
             var pipeline = new LearningPipeline()
             {

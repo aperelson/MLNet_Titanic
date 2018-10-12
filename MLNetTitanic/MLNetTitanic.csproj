@@ -6,12 +6,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="complete_train.csv" />
     <None Remove="real_test.csv" />
     <None Remove="test_data.csv" />
     <None Remove="train_data.csv" />
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="complete_train.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="real_test.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
